@@ -59,6 +59,9 @@ export default function Products() {
     // Selected variant per product map (productId -> selectedVariantId)
     const [selectedVariants, setSelectedVariants] = useState({});
 
+    // Active promotions map (variantId -> discountedPrice)
+    const [activePromotions, setActivePromotions] = useState({});
+
     // Site modal notifications
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState('');
@@ -75,6 +78,37 @@ export default function Products() {
         const localId = localStorage.getItem('customerId');
         if (localId) return Number(localId);
         return null;
+    };
+
+    const fetchActivePromotions = async () => {
+        try {
+            const res = await api.get('/api/price-lists');
+            const lists = res.data || res || [];
+            const promoMap = {};
+            const today = new Date();
+
+            lists.forEach(l => {
+                if (l.isActive) {
+                    const start = l.startDate ? new Date(l.startDate) : null;
+                    const end = l.endDate ? new Date(l.endDate) : null;
+                    if (start) start.setHours(0, 0, 0, 0);
+                    if (end) end.setHours(23, 59, 59, 999);
+
+                    if ((!start || today >= start) && (!end || today <= end)) {
+                        if (l.items && l.items.length > 0) {
+                            l.items.forEach(item => {
+                                if (item.variantId && item.price) {
+                                    promoMap[item.variantId] = item.price;
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+            setActivePromotions(promoMap);
+        } catch (e) {
+            console.error('Promotions fetch error:', e);
+        }
     };
 
     const fetchProducts = async () => {
@@ -120,6 +154,7 @@ export default function Products() {
     useEffect(() => {
         fetchProducts();
         fetchCategories();
+        fetchActivePromotions();
 
         // Auto play carousel
         const interval = setInterval(() => {
@@ -686,6 +721,7 @@ export default function Products() {
                         // Display price: if variant is selected, show variant price, else general product price
                         const displayPrice = currentSelectedVariant ? currentSelectedVariant.price : product.price;
                         const displayStock = currentSelectedVariant ? currentSelectedVariant.stockQuantity : (product.stockQuantity !== null && product.stockQuantity !== undefined ? product.stockQuantity : 10);
+                        const promoPrice = currentSelectedVariant ? activePromotions[currentSelectedVariant.id] : null;
 
                         return (
                             <div key={product.id} className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', padding: '0', overflow: 'hidden' }}>
@@ -700,6 +736,31 @@ export default function Products() {
                                         onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                         onClick={() => openProductDetailDialog(product)}
                                     />
+
+                                    {/* Active Campaign / Promotion Overlay Badge */}
+                                    {promoPrice && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '10px',
+                                            left: '10px',
+                                            backgroundColor: '#ef4444',
+                                            color: 'white',
+                                            fontSize: '11px',
+                                            fontWeight: '800',
+                                            padding: '4px 10px',
+                                            borderRadius: '20px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.5px',
+                                            boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            zIndex: 2
+                                        }}>
+                                            <i className='bx bxs-hot' style={{ fontSize: '14px' }}></i> KAMPANYALI İNDİRİM
+                                        </div>
+                                    )}
+
                                     {isAdmin && (
                                         <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '6px' }}>
                                             <button 
@@ -748,12 +809,26 @@ export default function Products() {
                                             {product.name}
                                         </h3>
 
-                                        {/* Price tag */}
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '12px' }}>
-                                            <span style={{ fontSize: '22px', fontWeight: '800', color: 'var(--primary)' }}>
-                                                {displayPrice ? `${displayPrice} ₺` : 'Fiyat Belirtilmemiş'}
-                                            </span>
-                                        </div>
+                                        {/* Price tag with Campaign / Promotion rendering */}
+                                        {promoPrice ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: '15px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: '500' }}>
+                                                    {displayPrice} ₺
+                                                </span>
+                                                <span style={{ fontSize: '22px', fontWeight: '800', color: '#d97706' }}>
+                                                    {promoPrice} ₺
+                                                </span>
+                                                <span style={{ fontSize: '10px', fontWeight: '800', backgroundColor: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '12px', border: '1px solid #fde68a' }}>
+                                                    İndirimli
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '12px' }}>
+                                                <span style={{ fontSize: '22px', fontWeight: '800', color: 'var(--primary)' }}>
+                                                    {displayPrice ? `${displayPrice} ₺` : 'Fiyat Belirtilmemiş'}
+                                                </span>
+                                            </div>
+                                        )}
 
                                         {/* Variants Selector */}
                                         <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
@@ -767,11 +842,14 @@ export default function Products() {
                                                         className="form-control"
                                                         style={{ padding: '6px 10px', fontSize: '12px', height: '34px', appearance: 'none', cursor: 'pointer' }}
                                                     >
-                                                        {product.variants.map(v => (
-                                                            <option key={v.id} value={v.id}>
-                                                                {v.sku} - {v.color || 'Standart'} ({v.material || 'Kumaş'}, {v.size || 'Ebat'}) - {v.price} ₺
-                                                            </option>
-                                                        ))}
+                                                        {product.variants.map(v => {
+                                                            const isPromo = activePromotions[v.id];
+                                                            return (
+                                                                <option key={v.id} value={v.id}>
+                                                                    {v.sku} - {v.color || 'Standart'} ({v.material || 'Kumaş'}, {v.size || 'Ebat'}) - {isPromo ? `${isPromo} ₺ (İndirimli Kampanya!)` : `${v.price} ₺`}
+                                                                </option>
+                                                            );
+                                                        })}
                                                     </select>
                                                     <i className='bx bx-chevron-down' style={{ position: 'absolute', right: '10px', top: '9px', pointerEvents: 'none', color: 'var(--text-muted)' }}></i>
                                                 </div>
@@ -911,21 +989,35 @@ export default function Products() {
                                         </div>
                                         <h2 className="serif-title" style={{ fontSize: '28px', color: 'var(--primary)', margin: '0 0 10px 0', lineHeight: '1.2' }}>{product.name}</h2>
                                         
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-                                            <span style={{ fontSize: '26px', fontWeight: '800', color: 'var(--accent)' }}>
-                                                {displayPrice ? `${displayPrice} ₺` : 'Fiyat Belirtilmemiş'}
-                                            </span>
-                                            <span style={{ 
-                                                fontSize: '12px', 
-                                                fontWeight: '600', 
-                                                color: displayStock > 0 ? 'var(--success)' : 'var(--error)',
-                                                backgroundColor: displayStock > 0 ? '#ecfdf5' : '#fef2f2',
-                                                padding: '3px 8px',
-                                                borderRadius: '4px'
-                                            }}>
-                                                {displayStock > 0 ? `Stok: ${displayStock} Adet` : 'Stok Tükendi'}
-                                            </span>
-                                        </div>
+                                        {promoPrice ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: '18px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: '500' }}>
+                                                    {displayPrice} ₺
+                                                </span>
+                                                <span style={{ fontSize: '28px', fontWeight: '800', color: '#d97706' }}>
+                                                    {promoPrice} ₺
+                                                </span>
+                                                <span style={{ fontSize: '11px', fontWeight: '800', backgroundColor: '#fef3c7', color: '#b45309', padding: '3px 10px', borderRadius: '12px', border: '1px solid #fde68a' }}>
+                                                    İndirimli Kampanya Fiyatı!
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
+                                                <span style={{ fontSize: '26px', fontWeight: '800', color: 'var(--accent)' }}>
+                                                    {displayPrice ? `${displayPrice} ₺` : 'Fiyat Belirtilmemiş'}
+                                                </span>
+                                                <span style={{ 
+                                                    fontSize: '12px', 
+                                                    fontWeight: '600', 
+                                                    color: displayStock > 0 ? 'var(--success)' : 'var(--error)',
+                                                    backgroundColor: displayStock > 0 ? '#ecfdf5' : '#fef2f2',
+                                                    padding: '3px 8px',
+                                                    borderRadius: '4px'
+                                                }}>
+                                                    {displayStock > 0 ? `Stok: ${displayStock} Adet` : 'Stok Tükendi'}
+                                                </span>
+                                            </div>
+                                        )}
 
                                         <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.6', margin: '0 0 20px 0' }}>
                                             {getMockDescription(product.name)}
