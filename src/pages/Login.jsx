@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
-import logo from '../assets/images.jpg';
 import './Login.css';
 import SiteModal from '../components/SiteModal';
 
@@ -12,6 +11,7 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [address, setAddress] = useState('');
+    const [role, setRole] = useState('ROLE_CUSTOMER'); // default to customer, but selectable
     
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
@@ -28,13 +28,12 @@ export default function Login() {
 
         const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
 
-        // Backend Role enum yapısına ('ROLE_CUSTOMER') tam uyumlu payload
         const payload = isRegister 
             ? { 
                 name, 
                 email, 
                 password, 
-                role: 'ROLE_CUSTOMER', 
+                role, 
                 phoneNumber, 
                 address 
               }
@@ -45,174 +44,216 @@ export default function Login() {
 
         try {
             const response = await api.post(endpoint, payload);
+            const data = response.data;
+
+            // Save authentication response details for both login and register
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('customerId', data.id);
+                localStorage.setItem('customerName', data.name);
+                localStorage.setItem('customerRole', data.role);
+            }
 
             if (isRegister) {
-                setSuccessMessage('Kayıt başarılı! Şimdi giriş yapabilirsiniz.');
-                setIsRegister(false);
-                setPassword('');
-                } else {
-                localStorage.setItem('token', response.data.token || response.data);
+                setModalTitle('Kayıt Başarılı');
+                setModalMessage(`Tebrikler ${data.name || name}! Hesabınız başarıyla oluşturuldu ve oturum açıldı.`);
+                setModalVariant('success');
+                setModalOpen(true);
+            } else {
                 setModalTitle('Giriş Başarılı');
-                setModalMessage('Hoşgeldiniz! Oturum açıldı.');
+                setModalMessage(`Hoşgeldiniz ${data.name}! Oturum açıldı.`);
                 setModalVariant('success');
                 setModalOpen(true);
             }
         } catch (err) {
             console.error(err);
-            setError(isRegister ? 'Kayıt olurken bir hata oluştu.' : 'E-posta veya şifre hatalı.');
+            const serverMsg = err?.response?.data?.message || err?.response?.data;
+            setError(isRegister 
+                ? (typeof serverMsg === 'string' ? serverMsg : 'Kayıt olurken bir hata oluştu.') 
+                : 'E-posta veya şifre hatalı.'
+            );
         }
     };
 
+    const toggleMode = (registerState) => {
+        setIsRegister(registerState);
+        setName('');
+        setEmail('');
+        setPassword('');
+        setPhoneNumber('');
+        setAddress('');
+        setError('');
+        setSuccessMessage('');
+    };
+
     return (
-        <div className="login-page" style={{
-            minHeight: '100vh',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: '#f1f5f9',
-            padding: '20px 0'
-        }}>
-            <div className="login-card" style={{
-                background: 'white',
-                padding: '30px 40px',
-                borderRadius: '12px',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.05)',
-                width: '100%',
-                maxWidth: '450px',
-                textAlign: 'center'
-            }}>
-                <div style={{ marginBottom: '20px' }}>
-                    <img className="login-logo" src={logo} alt="Mondi logo" style={{ width: '100px', objectFit: 'contain', marginBottom: '8px' }} />
-                    <h2 className="login-title" style={{ color: '#0f172a', margin: '0 0 5px 0', fontSize: '20px' }}>
-                        {isRegister ? 'Mondi Tracking - Kayıt Ol' : 'Mondi Tracking - Giriş'}
-                    </h2>
-                    <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>
-                        {isRegister ? 'Sipariş takibi için bilgilerinizi girin' : 'Lütfen giriş yapın'}
-                    </p>
-                </div>
-
-                {error && (
-                    <div style={{
-                        backgroundColor: '#fef2f2',
-                        color: '#dc2626',
-                        padding: '10px',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        marginBottom: '15px',
-                        border: '1px solid #fecaca'
-                    }}>
-                        {error}
+        <div className="login-page">
+            <div className="login-container">
+                <div className="login-card">
+                    {/* Header */}
+                    <div className="login-header">
+                        <div className="login-logo-container">
+                            <i className='bx bx-home-alt login-logo-icon'></i>
+                            <span className="login-logo-text">MONDI <span>HOME</span></span>
+                        </div>
+                        <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--primary)', margin: '0 0 4px 0' }}>
+                            {isRegister ? 'Hesap Oluştur' : 'Bayi & Müşteri Girişi'}
+                        </h2>
+                        <p className="login-subtitle">
+                            {isRegister ? 'Akıllı mağaza portalına kayıt olun' : 'Sipariş ve mağaza takip sistemine bağlanın'}
+                        </p>
                     </div>
-                )}
 
-                {successMessage && (
-                    <div style={{
-                        backgroundColor: '#f0fdf4',
-                        color: '#16a34a',
-                        padding: '10px',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        marginBottom: '15px',
-                        border: '1px solid #bbf7d0'
-                    }}>
-                        {successMessage}
-                    </div>
-                )}
+                    {/* Feedback Messages */}
+                    {error && (
+                        <div className="login-alert login-alert-error">
+                            <i className='bx bx-error-circle' style={{ fontSize: '18px' }}></i>
+                            <span>{error}</span>
+                        </div>
+                    )}
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'left' }}>
-                    {isRegister && (
-                        <>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>Ad Soyad</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Adınızı ve soyadınızı girin" 
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    required
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
-                                />
-                            </div>
+                    {successMessage && (
+                        <div className="login-alert login-alert-success">
+                            <i className='bx bx-check-circle' style={{ fontSize: '18px' }}></i>
+                            <span>{successMessage}</span>
+                        </div>
+                    )}
 
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>Telefon</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="05XXXXXXXXX" 
-                                        value={phoneNumber}
-                                        onChange={(e) => setPhoneNumber(e.target.value)}
-                                        required
-                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
-                                    />
+                    {/* Form */}
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        {isRegister && (
+                            <>
+                                <div className="login-form-group">
+                                    <label className="form-label">Ad Soyad / Bayi Adı</label>
+                                    <div className="login-input-wrapper">
+                                        <i className='bx bxs-user login-input-icon'></i>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Adınızı veya bayilik adını girin" 
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value)}
+                                            required
+                                            className="login-input"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>Teslimat Adresi</label>
-                                <textarea 
-                                    placeholder="Mahalle, Cadde, Sokak, No, İlçe/İl" 
-                                    value={address}
-                                    onChange={(e) => setAddress(e.target.value)}
+                                <div className="login-row">
+                                    <div className="login-form-group">
+                                        <label className="form-label">Telefon</label>
+                                        <div className="login-input-wrapper">
+                                            <i className='bx bxs-phone login-input-icon'></i>
+                                            <input 
+                                                type="text" 
+                                                placeholder="05XXXXXXXXX" 
+                                                value={phoneNumber}
+                                                onChange={(e) => setPhoneNumber(e.target.value)}
+                                                required
+                                                className="login-input"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="login-form-group">
+                                        <label className="form-label">Hesap Türü</label>
+                                        <div className="login-input-wrapper">
+                                            <i className='bx bxs-shield login-input-icon' style={{ zIndex: 5 }}></i>
+                                            <select 
+                                                value={role} 
+                                                onChange={(e) => setRole(e.target.value)}
+                                                className="login-input"
+                                                style={{ paddingLeft: '42px', appearance: 'none', cursor: 'pointer' }}
+                                            >
+                                                <option value="ROLE_CUSTOMER">Normal Müşteri</option>
+                                                <option value="ROLE_ADMIN">Yönetici / Bayi Admin</option>
+                                            </select>
+                                            <i className='bx bx-chevron-down' style={{ position: 'absolute', right: '14px', pointerEvents: 'none', color: 'var(--text-muted)' }}></i>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="login-form-group">
+                                    <label className="form-label">Teslimat / Bayi Adresi</label>
+                                    <div className="login-input-wrapper">
+                                        <i className='bx bxs-map login-input-icon' style={{ top: '16px' }}></i>
+                                        <textarea 
+                                            placeholder="Mahalle, Cadde, Sokak, İlçe/İl açık adresini girin" 
+                                            value={address}
+                                            onChange={(e) => setAddress(e.target.value)}
+                                            required
+                                            rows="2"
+                                            className="login-input"
+                                            style={{ paddingLeft: '42px', resize: 'none', height: '60px', paddingTop: '10px' }}
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        <div className="login-form-group">
+                            <label className="form-label">E-posta Adresi</label>
+                            <div className="login-input-wrapper">
+                                <i className='bx bxs-envelope login-input-icon'></i>
+                                <input 
+                                    type="email" 
+                                    placeholder="ornek@mail.com" 
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     required
-                                    rows="2"
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', resize: 'none' }}
+                                    className="login-input"
                                 />
                             </div>
-                        </>
-                    )}
+                        </div>
 
-                    <div>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>E-posta Adresi</label>
-                        <input 
-                            type="email" 
-                            placeholder="ornek@mail.com" 
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
-                        />
+                        <div className="login-form-group">
+                            <label className="form-label">Şifre</label>
+                            <div className="login-input-wrapper">
+                                <i className='bx bxs-lock-alt login-input-icon'></i>
+                                <input 
+                                    type="password" 
+                                    placeholder="••••••••" 
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    className="login-input"
+                                />
+                            </div>
+                        </div>
+
+                        <button type="submit" className="login-button">
+                            <i className={isRegister ? 'bx bx-user-plus' : 'bx bx-log-in-circle'} style={{ fontSize: '18px' }}></i>
+                            {isRegister ? 'Hesap Oluştur ve Katıl' : 'Giriş Yap'}
+                        </button>
+                    </form>
+
+                    {/* Footer */}
+                    <div className="login-footer-text">
+                        {isRegister ? (
+                            <span>Zaten hesabınız var mı? 
+                                <button type="button" onClick={() => toggleMode(false)} className="login-footer-link">
+                                    Giriş Yap
+                                </button>
+                            </span>
+                        ) : (
+                            <span>Mondi Home sistemine yeni misiniz? 
+                                <button type="button" onClick={() => toggleMode(true)} className="login-footer-link">
+                                    Hesap Oluştur
+                                </button>
+                            </span>
+                        )}
                     </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>Şifre</label>
-                        <input 
-                            type="password" 
-                            placeholder="••••••••" 
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
-                        />
-                    </div>
-
-                    <button 
-                        type="submit" 
-                        style={{
-                            marginTop: '8px',
-                            padding: '11px',
-                            background: '#0284c7',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        {isRegister ? 'Kayıt Ol ve Adres Kaydet' : 'Giriş Yap'}
-                    </button>
-                </form>
-
-                <div style={{ marginTop: '15px', fontSize: '13px', color: '#64748b' }}>
-                    {isRegister ? (
-                        <span>Zaten hesabınız var mı? <button onClick={() => setIsRegister(file => !file)} style={{ background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', fontWeight: '600', padding: 0 }}>Giriş Yap</button></span>
-                    ) : (
-                        <span>Hesabınız yok mu? <button onClick={() => setIsRegister(true)} style={{ background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', fontWeight: '600', padding: 0 }}>Kayıt Ol</button></span>
-                    )}
                 </div>
             </div>
-            <SiteModal open={modalOpen} title={modalTitle} message={modalMessage} variant={modalVariant} onClose={() => { setModalOpen(false); navigate('/products'); }} />
+            <SiteModal 
+                open={modalOpen} 
+                title={modalTitle} 
+                message={modalMessage} 
+                variant={modalVariant} 
+                onClose={() => { 
+                    setModalOpen(false); 
+                    navigate('/products'); 
+                }} 
+            />
         </div>
     );
 }

@@ -5,6 +5,11 @@ import Layout from './components/Layout';
 import Products from './pages/Product';
 import RequireAuth from './components/RequireAuth';
 import Cart from './pages/Cart';
+import Categories from './pages/Categories';
+import PriceLists from './pages/PriceLists';
+import Orders from './pages/Orders';
+import Stores from './pages/Stores';
+import Profile from './pages/Profile';
 
 export default function App() {
     return (
@@ -16,11 +21,12 @@ export default function App() {
                 {/* Layout İçindeki Korumalı Rotalar */}
                 <Route element={<RequireAuth><Layout /></RequireAuth>}>
                     <Route path="/products" element={<Products />} />
-                    <Route path="/categories" element={<div>🏷️ Kategoriler Ekranı (Hazırlanıyor)</div>} />
-                    <Route path="/price-lists" element={<div>💰 Fiyat Listeleri Ekranı (Hazırlanıyor)</div>} />
-                    <Route path="/orders" element={<div>🚚 Sipariş Takip Ekranı (Hazırlanıyor)</div>} />
+                    <Route path="/categories" element={<Categories />} />
+                    <Route path="/price-lists" element={<PriceLists />} />
+                    <Route path="/orders" element={<Orders />} />
                     <Route path="/cart" element={<Cart />} />
-                    <Route path="/stores" element={<div>🏬 Mağazalar Ekranı (Hazırlanıyor)</div>} />
+                    <Route path="/stores" element={<Stores />} />
+                    <Route path="/profile" element={<Profile />} />
                 </Route>
 
                 {/* Tanımsız yollarda login'e yönlendir */}
