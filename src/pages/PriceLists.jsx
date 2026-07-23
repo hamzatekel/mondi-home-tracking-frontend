@@ -48,15 +48,32 @@ export default function PriceLists() {
         try {
             setLoadingItems(true);
             const res = await api.get(`/api/price-lists/${id}`);
-            setSelectedList(res.data);
-            // Assuming the price list details returns items
-            setSelectedListItems(res.data.items || []);
+            const data = res.data || res;
+            setSelectedList(data);
+            setSelectedListItems(data.items || []);
         } catch (err) {
             console.error(err);
-            // Fallback empty items
             setSelectedListItems([]);
         } finally {
             setLoadingItems(false);
+        }
+    };
+
+    const handleDeleteItemFromPriceList = async (priceListId, itemId) => {
+        if (!window.confirm('Bu fiyatlandırma kaydını silmek istediğinize emin misiniz?')) return;
+        try {
+            await api.delete(`/api/price-lists/${priceListId}/items/${itemId}`);
+            setModalTitle('Başarılı');
+            setModalMessage('Varyant fiyat kaydı silindi.');
+            setModalVariant('success');
+            setModalOpen(true);
+            fetchListDetails(priceListId);
+        } catch (err) {
+            console.error(err);
+            setModalTitle('Hata');
+            setModalMessage('Fiyat kaydı silinirken hata oluştu.');
+            setModalVariant('error');
+            setModalOpen(true);
         }
     };
 
@@ -280,18 +297,30 @@ export default function PriceLists() {
                                         <thead>
                                             <tr>
                                                 <th>Varyant / Ürün</th>
-                                                <th>Fiyat</th>
+                                                <th>Özel Liste Fiyatı</th>
+                                                {isAdmin && <th style={{ textAlign: 'right' }}>İşlem</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {selectedListItems.map((item) => (
                                                 <tr key={item.id}>
                                                     <td style={{ fontWeight: '500' }}>
-                                                        {item.variantSku || `Varyant #${item.variantId || item.id}`}
+                                                        {item.variantName || item.variantSku || `Varyant #${item.variantId || item.id}`}
                                                     </td>
-                                                    <td style={{ fontWeight: '600', color: 'var(--accent)' }}>
+                                                    <td style={{ fontWeight: '700', color: 'var(--accent)', fontSize: '15px' }}>
                                                         {item.price ? `${item.price} ₺` : '-'}
                                                     </td>
+                                                    {isAdmin && (
+                                                        <td style={{ textAlign: 'right' }}>
+                                                            <button 
+                                                                onClick={() => handleDeleteItemFromPriceList(selectedList.id, item.id)}
+                                                                style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '18px' }}
+                                                                title="Kaydı Sil"
+                                                            >
+                                                                <i className='bx bx-trash'></i>
+                                                            </button>
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))}
                                         </tbody>
