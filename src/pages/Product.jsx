@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { getCurrentUser } from '../services/auth';
 import SiteModal from '../components/SiteModal';
 
 export default function Products() {
+    const navigate = useNavigate();
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -525,30 +527,73 @@ export default function Products() {
 
     const uniqueCategories = ['ALL', ...new Set(products.map(p => p.categoryName).filter(Boolean))];
 
-    // Carousel slides definitions
-    const slides = [
+    // Dynamic Showcase slides derived from real database products (newest first) + IoT tracking banner
+    const slides = products.length > 0 ? [
+        ...[...products].reverse().map((product, idx) => {
+            const hasPromo = product.variants && product.variants.some(v => activePromotions[v.id]);
+            const firstVariant = product.variants && product.variants[0];
+            const promoPrice = firstVariant ? activePromotions[firstVariant.id] : null;
+
+            let badge = 'Öne Çıkan';
+            if (hasPromo) badge = '🔥 KAMPANYA';
+            else if (idx === 0) badge = 'YENİ ÜRÜN';
+            else if (idx === 1) badge = 'Yeni Sezon';
+            else if (idx === 2) badge = 'Trend';
+
+            return {
+                id: product.id,
+                title: product.name,
+                sub: `Mondi Home ${product.categoryName || 'Mobilya'} Koleksiyonu`,
+                desc: `${product.name} ile yaşam alanınıza estetik, konfor ve Mondi Home kalitesini taşıyın. ${promoPrice ? `Özel kampanya fiyatıyla sadece ${promoPrice} ₺!` : ''}`,
+                bg: getProductImage(product),
+                badge: badge,
+                product: product,
+                buttonText: `${product.name} Ürünlerini Keşfet`
+            };
+        }),
         {
-            title: 'Vienna Koleksiyonu',
-            sub: 'Zarafet ve Konforun Muhteşem Uyumu',
-            desc: 'Yaşam alanınıza modern bir soluk getiren, üstün kumaş kalitesi ve ergonomik tasarımıyla yeni Vienna Koltuk Takımı.',
-            bg: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80',
-            badge: 'Yeni Sezon'
-        },
-        {
-            title: 'Loren Yemek Odası',
-            sub: 'Aile Yemeklerinde Estetik Dokunuşlar',
-            desc: 'Doğal ahşap yüzeyler, altın metalik detaylar ve zengin sandalye döşemeleriyle tasarlanmış seçkin bir davet alanı.',
-            bg: 'https://images.unsplash.com/photo-1617806118233-18e1db207f62?auto=format&fit=crop&w=1200&q=80',
-            badge: 'Kampanya'
-        },
-        {
+            id: 'tracking',
             title: 'Akıllı Sipariş Takibi',
             sub: 'Üretimden Evinize Canlı IoT İzleme',
             desc: 'Koltuk ve mobilyalarınızın hazırlık, paketleme ve lojistik aşamalarını harita ve zaman çizelgemizden anlık olarak takip edin.',
             bg: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80',
-            badge: 'Akıllı Hizmet'
+            badge: 'Akıllı Hizmet',
+            route: '/orders',
+            buttonText: 'Canlı Sipariş Takibine Git'
+        }
+    ] : [
+        {
+            id: 'default',
+            title: 'Mondi Home Koleksiyonları',
+            sub: 'Zarafet ve Konforun Muhteşem Uyumu',
+            desc: 'Yaşam alanınıza modern bir soluk getiren üstün kumaş kalitesi ve ergonomik tasarımlar.',
+            bg: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80',
+            badge: 'Öne Çıkan',
+            buttonText: 'Koleksiyonu Keşfet'
         }
     ];
+
+    const currentSlide = slides[activeSlide % slides.length] || slides[0];
+
+    const handleSlideClick = (slide) => {
+        if (slide.route) {
+            navigate(slide.route);
+            return;
+        }
+
+        if (slide.product) {
+            if (slide.product.categoryName) {
+                setSelectedCategoryName(slide.product.categoryName);
+            }
+            openProductDetailDialog(slide.product);
+            return;
+        }
+
+        const catalogElem = document.getElementById('catalog-grid-section');
+        if (catalogElem) {
+            catalogElem.scrollIntoView({ behavior: 'smooth' });
+        }
+    };
 
     return (
         <div className="animate-fade-in" style={{ paddingBottom: '40px' }}>
@@ -570,7 +615,7 @@ export default function Products() {
                 <div style={{
                     position: 'absolute',
                     top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundImage: `linear-gradient(to right, rgba(10,27,45,0.9) 30%, rgba(10,27,45,0.3) 100%), url(${slides[activeSlide].bg})`,
+                    backgroundImage: `linear-gradient(to right, rgba(10,27,45,0.9) 30%, rgba(10,27,45,0.3) 100%), url(${currentSlide.bg})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     transition: 'all 0.8s ease-in-out',
@@ -590,26 +635,24 @@ export default function Products() {
                         textTransform: 'uppercase',
                         letterSpacing: '1px'
                     }}>
-                        {slides[activeSlide].badge}
+                        {currentSlide.badge}
                     </span>
                     <h1 className="serif-title" style={{ fontSize: '38px', color: 'white', margin: 0, lineHeight: '1.2' }}>
-                        {slides[activeSlide].title}
+                        {currentSlide.title}
                     </h1>
                     <h4 style={{ fontSize: '18px', color: 'var(--gold)', fontWeight: '500', margin: 0 }}>
-                        {slides[activeSlide].sub}
+                        {currentSlide.sub}
                     </h4>
                     <p style={{ fontSize: '13px', color: '#cbd5e1', lineHeight: '1.5', margin: 0 }}>
-                        {slides[activeSlide].desc}
+                        {currentSlide.desc}
                     </p>
                     <button 
                         className="btn btn-accent" 
-                        style={{ alignSelf: 'flex-start', marginTop: '10px', padding: '8px 18px', fontSize: '12px' }}
-                        onClick={() => {
-                            const match = products.find(p => p.name.toLowerCase().includes('vienna'));
-                            if (match) openProductDetailDialog(match);
-                        }}
+                        style={{ alignSelf: 'flex-start', marginTop: '10px', padding: '10px 22px', fontSize: '13px', fontWeight: '700', borderRadius: '8px', boxShadow: '0 4px 12px rgba(217, 119, 6, 0.3)' }}
+                        onClick={() => handleSlideClick(currentSlide)}
                     >
-                        Koleksiyonu Keşfet
+                        <i className={currentSlide.route ? 'bx bx-map-pin' : 'bx bx-search-alt'} style={{ fontSize: '16px', marginRight: '6px' }}></i>
+                        {currentSlide.buttonText}
                     </button>
                 </div>
 
@@ -641,7 +684,7 @@ export default function Products() {
             </div>
 
             {/* Header Area */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+            <div id="catalog-grid-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
                 <div>
                     <h2 className="serif-title" style={{ fontSize: '28px', color: 'var(--primary)', marginBottom: '6px' }}>Ürün ve Varyant Kataloğu</h2>
                     <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Mondi Home mobilya koleksiyonlarını, renk, kumaş ve boyut varyantlarıyla birlikte inceleyin.</p>
@@ -932,6 +975,7 @@ export default function Products() {
 
                 const displayPrice = currentSelectedVariant ? currentSelectedVariant.price : product.price;
                 const displayStock = currentSelectedVariant ? currentSelectedVariant.stockQuantity : (product.stockQuantity !== null && product.stockQuantity !== undefined ? product.stockQuantity : 10);
+                const promoPrice = currentSelectedVariant ? activePromotions[currentSelectedVariant.id] : null;
                 
                 // Construct a mock details description based on product type
                 const getMockDescription = (name) => {
